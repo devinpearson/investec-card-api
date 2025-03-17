@@ -73,7 +73,7 @@ export class InvestecCardApi {
     if (!result.scope.includes('cards')) {
       throw new Error('You require the cards scope to use this tool');
     }
-    
+
     this.token = result.access_token;
     return result;
   }
@@ -121,7 +121,7 @@ export class InvestecCardApi {
     return fetchPost<CodeResponse>(endpoint, token, raw);
   }
 
-  async fetchCards(): Promise<CardResponse> {
+  async getCards(): Promise<CardResponse> {
     const endpoint = createEndpoint(this.host, `/za/v1/cards`);
     const token = this.token || (await this.getToken());
     return fetchGet<CardResponse>(endpoint, token);
