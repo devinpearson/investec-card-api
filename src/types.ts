@@ -1,3 +1,6 @@
+/**
+ * Represents the response from the authentication endpoint.
+ */
 export interface AuthResponse {
   access_token: string;
   token_type: string;
@@ -5,6 +8,9 @@ export interface AuthResponse {
   scope: string;
 }
 
+/**
+ * Represents a generic reference response containing a list of code-name pairs.
+ */
 export interface ReferenceResponse {
   data: {
     result: Array<{
@@ -14,6 +20,9 @@ export interface ReferenceResponse {
   };
 }
 
+/**
+ * Represents a card object.
+ */
 export interface Card {
   CardKey: number;
   CardNumber: string;
@@ -24,12 +33,18 @@ export interface Card {
   AccountId: string;
 }
 
+/**
+ * Represents the response containing a list of cards.
+ */
 export interface CardResponse {
   data: {
     cards: Card[];
   };
 }
 
+/**
+ * Represents the response containing code details.
+ */
 export interface CodeResponse {
   data: {
     result: {
@@ -42,10 +57,16 @@ export interface CodeResponse {
   };
 }
 
+/**
+ * Represents a set of environment variables as key-value pairs.
+ */
 export interface EnvVars {
   [key: string]: string;
 }
 
+/**
+ * Represents the response containing environment variables.
+ */
 export interface EnvResponse {
   data: {
     result: {
@@ -57,18 +78,30 @@ export interface EnvResponse {
   };
 }
 
+/**
+ * Represents the result of a code execution, including execution items and errors.
+ */
 export interface ExecutionResult {
   data: { result: { executionItems: ExecutionItem[]; error: null } };
 }
 
+/**
+ * Represents the result of executing code, containing execution items.
+ */
 export interface ExecuteResult {
   data: { result: ExecutionItem[] };
 }
 
+/**
+ * Represents the response for toggling code features.
+ */
 export interface CodeToggle {
   data: { result: { Enabled: boolean } };
 }
 
+/**
+ * Represents a single execution item in a code execution result.
+ */
 export interface ExecutionItem {
   executionId: string;
   rootCodeFunctionId: string;
@@ -85,6 +118,9 @@ export interface ExecutionItem {
   updatedAt: string;
 }
 
+/**
+ * Represents a transaction object for code execution.
+ */
 export interface Transaction {
   accountNumber: string;
   dateTime: string;
@@ -98,6 +134,9 @@ export interface Transaction {
   merchant: Merchant;
 }
 
+/**
+ * Represents a merchant involved in a transaction.
+ */
 export interface Merchant {
   category: MerchantCategory;
   name: string;
@@ -105,19 +144,28 @@ export interface Merchant {
   country: Country;
 }
 
+/**
+ * Represents a merchant category.
+ */
 export interface MerchantCategory {
   key: string;
   code: string;
   name: string;
 }
 
+/**
+ * Represents a country object.
+ */
 export interface Country {
   code: CountryCode;
   alpha3: string;
   name: string;
 }
 
-export declare enum CountryCode {
+/**
+ * Enum of supported country codes.
+ */
+export enum CountryCode {
   AF = 'AF',
   AL = 'AL',
   DZ = 'DZ',

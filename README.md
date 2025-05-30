@@ -2,14 +2,11 @@
 
 Connect with the Investec Card API.
 
-[![Node.js CI](https://github.com/devinpearson/investec-card-api/actions/workflows/node.js.yml/badge.svg)](https://github.com/devinpearson/investec-card-api/actions/workflows/node.js.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![npm version](https://badge.fury.io/js/investec-card-api.svg)](https://badge.fury.io/js/investec-card-api)
+[![Node.js CI](https://github.com/devinpearson/investec-card-api/actions/workflows/node.js.yml/badge.svg)](https://github.com/devinpearson/investec-card-api/actions/workflows/node.js.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![npm version](https://badge.fury.io/js/investec-card-api.svg)](https://badge.fury.io/js/investec-card-api)
 
 ## About
 
-A basic package to connect to the investec programmable card api.
-It was created to service the investec-ipb command line application.
+A basic package to connect to the investec programmable card api. It was created to service the investec-ipb command line application.
 
 ## Installation
 
@@ -48,72 +45,135 @@ const cards = await cardApi.uploadEnv(cardKey, env);
 Uploads the code to a card as the saved card code:
 
 ```typescript
-const cards = await cardApi.uploadCode(cardKey, code);
+const result = await cardApi.uploadCode(cardKey, code);
 ```
 
-Upload a published code to a card:
-codeid is the id from the saved code that has previously uploaded.
-This code will be used when the card is enabled.
+## Examples
 
-```typescript
-const cards = await cardApi.uploadPublishedCode(cardKey, codeId, code);
+Example scripts are available in the `examples/` directory. These scripts demonstrate how to use the API for common tasks:
+
+- `examples/list-cards.ts`: List all programmable cards for your account.
+- `examples/upload-code.ts`: Upload code to a programmable card.
+- `examples/toggle-feature.ts`: Enable or disable the programmable feature on a card.
+- `examples/execute-code.ts`: Execute code in a simulated transaction context.
+
+### Running the Examples
+
+1. Copy the relevant example file from the `examples/` directory.
+2. Replace the placeholder values (`your-client-id`, `your-client-secret`, `your-api-key`, and `cardKey`) with your actual Investec API credentials and card details.
+3. Run the example using `ts-node` (or compile to JavaScript and run with `node`):
+
+```sh
+npx ts-node examples/list-cards.ts
 ```
 
-Fetch the environment for a card:
+Or, for another example:
 
-```typescript
-const cards = await cardApi.getEnv(cardKey);
+```sh
+npx ts-node examples/execute-code.ts
 ```
 
-Fetch the saved card code for a card:
+> **Note:** You must have your Investec API credentials and the `ts-node` package installed to run the TypeScript examples directly.
+
+## API Response Shapes
+
+Below are the main response shapes returned by this library. All methods return typed objects matching these interfaces:
+
+### CardResponse
 
 ```typescript
-const code = await cardApi.getCode(cardKey);
+{
+  data: {
+    cards: Array<{
+      CardKey: number;
+      CardNumber: string;
+      IsProgrammable: boolean;
+      status: string;
+      CardTypeCode: string;
+      AccountNumber: string;
+      AccountId: string;
+    }>;
+  }
+}
 ```
 
-Fetch the published code for a card:
+### CodeResponse
 
 ```typescript
-const cards = await cardApi.getPublishedCode(cardKey);
+{
+  data: {
+    result: {
+      codeId: string;
+      code: string;
+      createdAt: string;
+      updatedAt: string;
+      error: null;
+    }
+  }
+}
 ```
 
-Enable the card code or disable it:
+### EnvResponse
 
 ```typescript
-const cards = await cardApi.toggleCode(cardKey, true);
+{
+  data: {
+    result: {
+      variables: { [key: string]: string };
+      createdAt: string;
+      updatedAt: string;
+      error: null;
+    };
+  };
+}
 ```
 
-Get a list of all executions and the logs for each execution:
-These do not include transactions when the code is disabled.
+### CodeToggle
 
 ```typescript
-const cards = await cardApi.getExecutions(cardKey);
+{
+  data: {
+    result: {
+      Enabled: boolean;
+    }
+  }
+}
 ```
 
-Runs a simulation of the code and returns the result:
+### ExecutionResult
 
 ```typescript
-const result = await cardApi.executeCode(code, transaction, cardKey);
+{
+  data: {
+    result: {
+      executionItems: Array<ExecutionItem>;
+      error: null;
+    }
+  }
+}
 ```
 
-### Reference Data
-
-Fetch a list of currencies and their codes:
+### ExecuteResult
 
 ```typescript
-const currencies = await cardApi.getCurrencies();
+{
+  data: {
+    result: Array<ExecutionItem>;
+  }
+}
 ```
 
-Fetch a list of countries and their codes:
+### ReferenceResponse
 
 ```typescript
-const countries = await cardApi.getCountries();
-```
-
-Fetch A list of merchants and the categories they belong to:
-
-```typescript
-const merchants = await cardApi.getMerchants();
+{
+  data: {
+    result: Array<{
+      Code: string;
+      Name: string;
+    }>;
+  }
+}
 ```
 
 ## License
