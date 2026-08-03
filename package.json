@@ -1,6 +1,6 @@
 {
   "name": "investec-card-api",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -29,6 +29,10 @@
   "author": "Devin Pearson",
   "license": "MIT",
   "description": "A simple package for interacting with Investec's programmable banking card API",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devinpearson/investec-card-api"
+  },
   "dependencies": {
     "node-fetch": "^3.3.2"
   },
