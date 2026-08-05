@@ -1,6 +1,6 @@
 {
   "name": "investec-card-api",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "main": "dist/index.cjs",
   "types": "dist/index.d.ts",
   "scripts": {
