@@ -17,10 +17,9 @@
 
     /* If transpiling with TypeScript: */
     "module": "Preserve",
-    "noEmit": true
+    "noEmit": true,
+    "types": ["node"]
   },
-  "include": ["./src/**/*"],
-  "exclude": [
-    "./dist/**/*" // This is what fixed it!
-  ]
+  "include": ["./src/**/*", "./tests/**/*"],
+  "exclude": ["./dist/**/*"]
 }

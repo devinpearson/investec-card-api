@@ -45,8 +45,10 @@ const cards = await cardApi.uploadEnv(cardKey, env);
 Uploads the code to a card as the saved card code:
 
 ```typescript
-const result = await cardApi.uploadCode(cardKey, code);
+const result = await cardApi.uploadCode(cardKey, { code: 'return true;' });
 ```
+
+Failed HTTP requests throw `InvestecApiError` with `status` and optional `body`.
 
 ## Examples
 
@@ -107,7 +109,7 @@ Below are the main response shapes returned by this library. All methods return 
       code: string;
       createdAt: string;
       updatedAt: string;
-      error: null;
+      error: string | null;
     }
   }
 }
@@ -122,7 +124,7 @@ Below are the main response shapes returned by this library. All methods return 
       variables: { [key: string]: string };
       createdAt: string;
       updatedAt: string;
-      error: null;
+      error: string | null;
     };
   };
 }
@@ -147,7 +149,7 @@ Below are the main response shapes returned by this library. All methods return 
   data: {
     result: {
       executionItems: Array<ExecutionItem>;
-      error: null;
+      error: string | null;
     }
   }
 }

@@ -43,6 +43,13 @@ export interface CardResponse {
 }
 
 /**
+ * Payload for uploading programmable card code.
+ */
+export interface CodePayload {
+  code: string;
+}
+
+/**
  * Represents the response containing code details.
  */
 export interface CodeResponse {
@@ -52,7 +59,7 @@ export interface CodeResponse {
       code: string;
       createdAt: string;
       updatedAt: string;
-      error: null;
+      error: string | null;
     };
   };
 }
@@ -73,7 +80,7 @@ export interface EnvResponse {
       variables: EnvVars;
       createdAt: string;
       updatedAt: string;
-      error: null;
+      error: string | null;
     };
   };
 }
@@ -82,7 +89,7 @@ export interface EnvResponse {
  * Represents the result of a code execution, including execution items and errors.
  */
 export interface ExecutionResult {
-  data: { result: { executionItems: ExecutionItem[]; error: null } };
+  data: { result: { executionItems: ExecutionItem[]; error: string | null } };
 }
 
 /**
@@ -100,6 +107,16 @@ export interface CodeToggle {
 }
 
 /**
+ * A single log entry from a code execution.
+ */
+export interface ExecutionLog {
+  level?: string;
+  message?: string;
+  timestamp?: string;
+  [key: string]: unknown;
+}
+
+/**
  * Represents a single execution item in a code execution result.
  */
 export interface ExecutionItem {
@@ -108,7 +125,7 @@ export interface ExecutionItem {
   sandbox: boolean;
   type: string;
   authorizationApproved: boolean | null;
-  logs: any[];
+  logs: ExecutionLog[];
   smsCount: number;
   emailCount: number;
   pushNotificationCount: number;
