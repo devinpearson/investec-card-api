@@ -1,21 +1,28 @@
 {
   "name": "investec-card-api",
   "version": "0.3.0",
-  "main": "dist/index.cjs",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "prepublishOnly": "npm run ci",
     "build": "tsup",
     "typecheck": "tsc",
-    "lint": "tsc",
-    "ci": "npm run build && npm run check-format && npm run check-exports && npm run typecheck && npm run test && npm audit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "ci": "npm run build && npm run typecheck && npm run lint && npm run check-exports && npm run test && npm audit",
     "check-exports": "attw --pack .",
-    "check-format": "prettier --check .",
-    "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "local-release": "changeset version && changeset publish"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:mutation": "stryker run",
+    "local-release": "changeset version && changeset publish",
+    "example:list-cards": "tsx examples/list-cards.ts",
+    "example:upload-code": "tsx examples/upload-code.ts",
+    "example:execute-code": "tsx examples/execute-code.ts",
+    "example:toggle-feature": "tsx examples/toggle-feature.ts"
   },
   "files": [
     "dist"
@@ -40,14 +47,17 @@
     "node": ">=20"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.17.0",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@biomejs/biome": "^2.6.6",
     "@changesets/cli": "^2.27.10",
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@types/node": "^20.10.7",
-    "@vitest/coverage-v8": "^3.2.7",
-    "prettier": "3.1.1",
+    "@vitest/coverage-v8": "^4.1.12",
     "tsup": "^8.3.5",
+    "tsx": "^4.23.15",
     "typescript": "^5.3.3",
-    "vitest": "^3.1.4"
+    "vitest": "^4.1.12"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -60,6 +70,11 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    }
+  },
+  "overrides": {
+    "@stryker-mutator/core": {
+      "minimatch": "^11.0.5"
     }
   }
 }

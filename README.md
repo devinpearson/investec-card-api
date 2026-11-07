@@ -36,10 +36,11 @@ Fetch a list of cards:
 const cards = await cardApi.getCards();
 ```
 
-Upload an environment to a card:
+Replace a card's environment variables (sent to the API as `{ variables: env }`):
 
 ```typescript
-const cards = await cardApi.uploadEnv(cardKey, env);
+const result = await cardApi.uploadEnv(cardKey, { API_KEY: 'value' });
+console.log(result.data.result.variables);
 ```
 
 Uploads the code to a card as the saved card code:
@@ -48,34 +49,39 @@ Uploads the code to a card as the saved card code:
 const result = await cardApi.uploadCode(cardKey, { code: 'return true;' });
 ```
 
-Failed HTTP requests throw `InvestecApiError` with `status` and optional `body`.
+### Errors
+
+Failed HTTP requests throw `InvestecApiError`:
+
+```typescript
+import { InvestecApiError } from 'investec-card-api';
+
+try {
+  await cardApi.getCode(cardKey);
+} catch (err) {
+  if (err instanceof InvestecApiError) {
+    console.error(err.status, err.message, err.endpoint, err.body);
+  }
+}
+```
+
+- `message` comes from the error body (plain text, or a JSON `message`, `error_description`, `error` or `title` field), falling back to the HTTP status text.
+- A 404 from a card endpoint (`getCode(cardKey)` and so on) has the message `Card not found`.
+- A token without the `cards` scope is rejected with status `403`.
+- A `2xx` response that isn't JSON is also an `InvestecApiError`.
+- A request that gets a `401` is retried once with a fresh token.
+- Card methods reject with a `TypeError`, without making a request, if `cardKey` isn't a non-negative integer.
 
 ## Examples
 
-Example scripts are available in the `examples/` directory. These scripts demonstrate how to use the API for common tasks:
+Runnable examples live in [`examples/`](examples/) and read credentials from environment variables. See [`examples/README.md`](examples/README.md) for setup.
 
-- `examples/list-cards.ts`: List all programmable cards for your account.
-- `examples/upload-code.ts`: Upload code to a programmable card.
-- `examples/toggle-feature.ts`: Enable or disable the programmable feature on a card.
-- `examples/execute-code.ts`: Execute code in a simulated transaction context.
-
-### Running the Examples
-
-1. Copy the relevant example file from the `examples/` directory.
-2. Replace the placeholder values (`your-client-id`, `your-client-secret`, `your-api-key`, and `cardKey`) with your actual Investec API credentials and card details.
-3. Run the example using `ts-node` (or compile to JavaScript and run with `node`):
-
-```sh
-npx ts-node examples/list-cards.ts
+```bash
+npm run example:list-cards
+npm run example:execute-code
 ```
 
-Or, for another example:
-
-```sh
-npx ts-node examples/execute-code.ts
-```
-
-> **Note:** You must have your Investec API credentials and the `ts-node` package installed to run the TypeScript examples directly.
+`example:upload-code` and `example:toggle-feature` change a real card, so they are dry runs unless you set `CONFIRM_UPLOAD=true` / `CONFIRM_TOGGLE=true`.
 
 ## API Response Shapes
 
@@ -177,6 +183,45 @@ Below are the main response shapes returned by this library. All methods return 
   }
 }
 ```
+
+## Development
+
+| Command                    | What it does                                                  |
+| -------------------------- | ------------------------------------------------------------- |
+| `npm test`                 | Unit tests (mocked `fetch`)                                   |
+| `npm run test:integration` | End-to-end tests against `programmable-banking-sim`           |
+| `npm run test:mutation`    | Stryker mutation testing; report in `reports/mutation/`       |
+| `npm run lint`             | Biome lint + format check (`npm run lint:fix` to fix)         |
+| `npm run ci`               | Build, typecheck, lint, check exports, unit tests, `npm audit` |
+
+### Integration tests
+
+The integration suite runs the client against [programmable-banking-sim](https://github.com/devinpearson/programmable-banking-sim).
+It is skipped unless `PB_SIM_URL` is set:
+
+```bash
+# in programmable-banking-sim
+PORT=3000 npm run dev
+```
+
+```bash
+PB_SIM_URL=http://localhost:3000 npm run test:integration
+```
+
+The default credentials are the simulator's seeded sandbox values; override
+them with `PB_SIM_CLIENT_ID`, `PB_SIM_CLIENT_SECRET` and `PB_SIM_API_KEY`.
+The suite creates its own card through the simulator and deletes it afterwards.
+
+The simulator differs from the real API in a few places, so:
+
+- Its tokens carry scope `accounts`, not `cards`, which this client rejects.
+  The tests use a client subclass that skips that check, plus one `test.fails`
+  tripwire for the scope itself.
+- Code, published code, toggle, executions and reference-data responses use
+  different shapes (and publishing uses `/publishedcode`, not `/publish`).
+  Each is a `test.fails` tripwire under "known simulator divergences".
+
+Flip a tripwire to `test` once the simulator matches the real API.
 
 ## License
 

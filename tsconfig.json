@@ -20,6 +20,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["./src/**/*", "./tests/**/*"],
+  "include": ["./src/**/*", "./tests/**/*", "./examples/**/*"],
   "exclude": ["./dist/**/*"]
 }

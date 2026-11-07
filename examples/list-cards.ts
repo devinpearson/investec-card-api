@@ -1,14 +1,19 @@
-// Example: List all programmable cards
-import { InvestecCardApi } from '../src/investec-card-api';
+// Example: list programmable cards
+import { createClientFromEnv } from './create-client';
 
-async function listCards() {
-  const api = new InvestecCardApi('your-client-id', 'your-client-secret', 'your-api-key');
-  try {
-    const cards = await api.getCards();
-    console.log('Cards:', cards.data.cards);
-  } catch (err) {
-    console.error('Error fetching cards:', err);
-  }
+const api = createClientFromEnv();
+
+try {
+  const { cards } = (await api.getCards()).data;
+  console.table(
+    cards.map((c) => ({
+      CardKey: c.CardKey,
+      CardNumber: c.CardNumber,
+      IsProgrammable: c.IsProgrammable,
+      status: c.status,
+    })),
+  );
+} catch (err) {
+  console.error('Error fetching cards:', err);
+  process.exitCode = 1;
 }
-
-listCards();
