@@ -1,14 +1,14 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
-import { InvestecCardApi } from '../src/investec-card-api';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { InvestecApiError } from '../src/errors';
+import { InvestecCardApi } from '../src/investec-card-api';
 import type {
   AuthResponse,
   CardResponse,
   CodeResponse,
-  EnvResponse,
   CodeToggle,
-  ExecutionResult,
+  EnvResponse,
   ExecuteResult,
+  ExecutionResult,
   ReferenceResponse,
   Transaction,
 } from '../src/types';
@@ -193,11 +193,15 @@ describe('InvestecCardApi', () => {
 
   describe('constructor', () => {
     test('defaults host to Investec production API', async () => {
-      const productionApi = new InvestecCardApi('clientId', 'clientSecret', 'apiKey');
+      const productionApi = new InvestecCardApi(
+        'clientId',
+        'clientSecret',
+        'apiKey',
+      );
       mockFetch.mockResolvedValue(jsonResponse(mockToken));
       await productionApi.getAccessToken();
       expect(String(mockFetch.mock.calls[0]?.[0])).toBe(
-        'https://openapi.investec.com/identity/v2/oauth2/token'
+        'https://openapi.investec.com/identity/v2/oauth2/token',
       );
     });
   });
@@ -221,7 +225,9 @@ describe('InvestecCardApi', () => {
     });
 
     test('getAccessToken throws InvestecApiError with parsed JSON body', async () => {
-      mockFetch.mockResolvedValue(jsonResponse({ error: 'invalid_client' }, 401, 'Unauthorized'));
+      mockFetch.mockResolvedValue(
+        jsonResponse({ error: 'invalid_client' }, 401, 'Unauthorized'),
+      );
       const error = await api.getAccessToken().catch((err: unknown) => err);
 
       expect(error).toBeInstanceOf(InvestecApiError);
@@ -232,7 +238,9 @@ describe('InvestecCardApi', () => {
     });
 
     test('getAccessToken uses plain-text body as message when response is not JSON', async () => {
-      mockFetch.mockResolvedValue(textResponse('auth failed', 403, 'Forbidden'));
+      mockFetch.mockResolvedValue(
+        textResponse('auth failed', 403, 'Forbidden'),
+      );
       await expect(api.getAccessToken()).rejects.toMatchObject({
         name: 'InvestecApiError',
         status: 403,
@@ -247,6 +255,7 @@ describe('InvestecCardApi', () => {
         name: 'InvestecApiError',
         status: 500,
         message: 'Internal Server Error',
+        body: undefined,
       });
     });
 
@@ -278,8 +287,46 @@ describe('InvestecCardApi', () => {
     });
 
     test('getAccessToken throws when cards scope is missing', async () => {
-      mockFetch.mockResolvedValue(jsonResponse({ ...mockToken, scope: 'accounts' }));
-      await expect(api.getAccessToken()).rejects.toThrow('You require the cards scope');
+      mockFetch.mockResolvedValue(
+        jsonResponse({ ...mockToken, scope: 'accounts' }),
+      );
+      await expect(api.getAccessToken()).rejects.toMatchObject({
+        name: 'InvestecApiError',
+        message: 'You require the cards scope to use this tool',
+        status: 403,
+        body: { scope: 'accounts' },
+        endpoint: `${HOST}/identity/v2/oauth2/token`,
+      });
+    });
+
+    test.each([
+      ['a scope that only contains "cards" as a substring', 'cardsx accounts'],
+      ['a missing scope', undefined],
+    ])('getAccessToken rejects %s', async (_label, scope) => {
+      mockFetch.mockResolvedValue(jsonResponse({ ...mockToken, scope }));
+      await expect(api.getAccessToken()).rejects.toMatchObject({
+        name: 'InvestecApiError',
+        status: 403,
+      });
+    });
+
+    test('getAccessToken accepts cards anywhere in a multi-scope string', async () => {
+      mockFetch.mockResolvedValue(
+        jsonResponse({ ...mockToken, scope: 'accounts  cards\ttransactions' }),
+      );
+      await expect(api.getAccessToken()).resolves.toMatchObject({
+        access_token: 'token',
+      });
+    });
+
+    test('getAccessToken wraps a non-JSON success body in InvestecApiError', async () => {
+      mockFetch.mockResolvedValue(textResponse('<html>', 200, 'OK'));
+      await expect(api.getAccessToken()).rejects.toMatchObject({
+        name: 'InvestecApiError',
+        status: 200,
+        body: '<html>',
+        message: `Expected a JSON response from ${HOST}/identity/v2/oauth2/token`,
+      });
     });
 
     test('getToken returns access token string', async () => {
@@ -296,7 +343,9 @@ describe('InvestecCardApi', () => {
       await api.getCards();
 
       expect(mockFetch).toHaveBeenCalledTimes(3);
-      expect(String(mockFetch.mock.calls[0]?.[0])).toContain('/identity/v2/oauth2/token');
+      expect(String(mockFetch.mock.calls[0]?.[0])).toContain(
+        '/identity/v2/oauth2/token',
+      );
       expect(String(mockFetch.mock.calls[1]?.[0])).toContain('/za/v1/cards');
       expect(String(mockFetch.mock.calls[2]?.[0])).toContain('/za/v1/cards');
     });
@@ -312,7 +361,7 @@ describe('InvestecCardApi', () => {
       await api.getCards();
 
       const tokenCalls = mockFetch.mock.calls.filter(([url]) =>
-        String(url).includes('/identity/v2/oauth2/token')
+        String(url).includes('/identity/v2/oauth2/token'),
       );
       expect(tokenCalls).toHaveLength(2);
     });
@@ -331,7 +380,7 @@ describe('InvestecCardApi', () => {
       await api.getCards();
 
       const tokenCalls = mockFetch.mock.calls.filter(([url]) =>
-        String(url).includes('/identity/v2/oauth2/token')
+        String(url).includes('/identity/v2/oauth2/token'),
       );
       expect(tokenCalls).toHaveLength(2);
     });
@@ -349,12 +398,16 @@ describe('InvestecCardApi', () => {
         return Promise.resolve(jsonResponse(mockCardResponse));
       });
 
-      const pending = Promise.all([api.getCards(), api.getCards(), api.getCurrencies()]);
+      const pending = Promise.all([
+        api.getCards(),
+        api.getCards(),
+        api.getCurrencies(),
+      ]);
       resolveToken(undefined);
       await pending;
 
       const tokenCalls = mockFetch.mock.calls.filter(([url]) =>
-        String(url).includes('/identity/v2/oauth2/token')
+        String(url).includes('/identity/v2/oauth2/token'),
       );
       expect(tokenCalls).toHaveLength(1);
       expect(mockFetch).toHaveBeenCalledTimes(4);
@@ -362,13 +415,36 @@ describe('InvestecCardApi', () => {
 
     test('allows a new refresh after a failed refresh attempt', async () => {
       mockFetch
-        .mockResolvedValueOnce(jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable'))
+        .mockResolvedValueOnce(
+          jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable'),
+        )
         .mockResolvedValueOnce(jsonResponse(mockToken))
         .mockResolvedValueOnce(jsonResponse(mockCardResponse));
 
       await expect(api.getCards()).rejects.toBeInstanceOf(InvestecApiError);
       await expect(api.getCards()).resolves.toEqual(mockCardResponse);
     });
+  });
+
+  test('refreshes exactly at the skew boundary', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T00:00:00Z'));
+
+    // expires_in 120s with a 60s skew: the token is stale at exactly +60s.
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ ...mockToken, expires_in: 120 }))
+      .mockResolvedValueOnce(jsonResponse(mockCardResponse))
+      .mockResolvedValueOnce(jsonResponse(mockToken))
+      .mockResolvedValueOnce(jsonResponse(mockCardResponse));
+
+    await api.getCards();
+    vi.setSystemTime(new Date('2024-01-01T00:01:00Z'));
+    await api.getCards();
+
+    const tokenCalls = mockFetch.mock.calls.filter(([url]) =>
+      String(url).includes('/identity/v2/oauth2/token'),
+    );
+    expect(tokenCalls).toHaveLength(2);
   });
 
   describe('HTTP request behaviour', () => {
@@ -400,7 +476,9 @@ describe('InvestecCardApi', () => {
         Accept: 'application/json',
         'content-type': 'application/json',
       });
-      expect(JSON.parse(String(init.body))).toEqual({ FOO: 'BAR' });
+      expect(JSON.parse(String(init.body))).toEqual({
+        variables: { FOO: 'BAR' },
+      });
     });
 
     test('encodes card keys in request paths', async () => {
@@ -418,17 +496,110 @@ describe('InvestecCardApi', () => {
         status: 404,
         message: 'Card not found',
         body: { message: 'missing' },
+        endpoint: `${HOST}/za/v1/cards/1/code`,
       });
     });
 
     test('throws InvestecApiError for non-404 API failures', async () => {
-      authThen(jsonResponse({ error: 'rate_limited' }, 429, 'Too Many Requests'));
+      authThen(
+        jsonResponse({ error: 'rate_limited' }, 429, 'Too Many Requests'),
+      );
 
       await expect(api.getCards()).rejects.toMatchObject({
         name: 'InvestecApiError',
         status: 429,
+        message: 'rate_limited',
         body: { error: 'rate_limited' },
+        endpoint: `${HOST}/za/v1/cards`,
       });
+    });
+
+    test.each([
+      [{ message: 'from message' }, 'from message'],
+      [{ error_description: 'from description' }, 'from description'],
+      [{ title: 'from title' }, 'from title'],
+      [{ message: '', error: 'skips empty values' }, 'skips empty values'],
+      [{ code: 42 }, 'Bad Request'],
+      [{ message: 42 }, 'Bad Request'],
+      [null, 'Bad Request'],
+      [[1, 2], 'Bad Request'],
+    ])('takes the error message from JSON body %j', async (body, message) => {
+      authThen(jsonResponse(body, 400, 'Bad Request'));
+      await expect(api.getCards()).rejects.toMatchObject({
+        status: 400,
+        message,
+        body,
+      });
+    });
+
+    test('card endpoints keep the real message for non-404 failures', async () => {
+      authThen(textResponse('upstream down', 503, 'Service Unavailable'));
+      await expect(api.getCode(1)).rejects.toMatchObject({
+        status: 503,
+        message: 'upstream down',
+      });
+    });
+
+    test('only card-scoped 404s are reported as "Card not found"', async () => {
+      authThen(emptyResponse(404, 'Not Found'));
+      await expect(api.getCurrencies()).rejects.toMatchObject({
+        status: 404,
+        message: 'Not Found',
+        endpoint: `${HOST}/za/v1/cards/currencies`,
+      });
+    });
+
+    test('wraps a non-JSON success body in InvestecApiError', async () => {
+      authThen(textResponse('', 200, 'OK'));
+      await expect(api.getCards()).rejects.toMatchObject({
+        name: 'InvestecApiError',
+        status: 200,
+        body: '',
+      });
+    });
+
+    test('retries once with a fresh token after a 401', async () => {
+      mockFetch
+        .mockResolvedValueOnce(
+          jsonResponse({ ...mockToken, access_token: 'old' }),
+        )
+        .mockResolvedValueOnce(emptyResponse(401, 'Unauthorized'))
+        .mockResolvedValueOnce(
+          jsonResponse({ ...mockToken, access_token: 'new' }),
+        )
+        .mockResolvedValueOnce(jsonResponse(mockCardResponse));
+
+      await expect(api.getCards()).resolves.toEqual(mockCardResponse);
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+      expect(lastCall().init.headers).toMatchObject({
+        Authorization: 'Bearer new',
+      });
+    });
+
+    test('gives up after a second 401', async () => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse(mockToken))
+        .mockResolvedValueOnce(emptyResponse(401, 'Unauthorized'))
+        .mockResolvedValueOnce(jsonResponse(mockToken))
+        .mockResolvedValueOnce(emptyResponse(401, 'Unauthorized'));
+
+      await expect(api.getCards()).rejects.toMatchObject({ status: 401 });
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+
+    test.each([Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY, 2 ** 53])(
+      'rejects card key %s before making a request',
+      async (cardKey) => {
+        await expect(api.getCode(cardKey)).rejects.toThrow(TypeError);
+        await expect(api.getCode(cardKey)).rejects.toThrow('Invalid card key');
+        expect(mockFetch).not.toHaveBeenCalled();
+      },
+    );
+
+    test('accepts card key 0', async () => {
+      authThen(jsonResponse(mockCodeResponse));
+      await api.getCode(0);
+      expect(lastCall().url).toBe(`${HOST}/za/v1/cards/0/code`);
     });
   });
 
@@ -462,7 +633,9 @@ describe('InvestecCardApi', () => {
       authThen(jsonResponse(mockCodeResponse));
       const res = await api.uploadCode(1, { code: 'return true;' });
       expect(res.data.result.codeId).toBe('id');
-      expect(JSON.parse(String(lastCall().init.body))).toEqual({ code: 'return true;' });
+      expect(JSON.parse(String(lastCall().init.body))).toEqual({
+        code: 'return true;',
+      });
     });
 
     test('getPublishedCode hits the publishedcode endpoint', async () => {
@@ -486,17 +659,23 @@ describe('InvestecCardApi', () => {
     test('toggleCode posts Enabled true and false', async () => {
       authThen(
         jsonResponse(mockCodeToggle),
-        jsonResponse({ data: { result: { Enabled: false } } })
+        jsonResponse({ data: { result: { Enabled: false } } }),
       );
 
       await expect(api.toggleCode(1, true)).resolves.toEqual(mockCodeToggle);
-      expect(JSON.parse(String(lastCall().init.body))).toEqual({ Enabled: true });
+      expect(JSON.parse(String(lastCall().init.body))).toEqual({
+        Enabled: true,
+      });
 
       await expect(api.toggleCode(1, false)).resolves.toEqual({
         data: { result: { Enabled: false } },
       });
-      expect(JSON.parse(String(lastCall().init.body))).toEqual({ Enabled: false });
-      expect(lastCall().url).toBe(`${HOST}/za/v1/cards/1/toggle-programmable-feature`);
+      expect(JSON.parse(String(lastCall().init.body))).toEqual({
+        Enabled: false,
+      });
+      expect(lastCall().url).toBe(
+        `${HOST}/za/v1/cards/1/toggle-programmable-feature`,
+      );
     });
 
     test('getExecutions returns execution history', async () => {
@@ -521,6 +700,105 @@ describe('InvestecCardApi', () => {
         merchantCity: 'Cape Town',
         countryCode: CountryCode.ZA,
       });
+    });
+  });
+
+  describe('routes', () => {
+    type Call = (api: InvestecCardApi) => Promise<unknown>;
+    test.each<[string, Call, 'GET' | 'POST', string, unknown]>([
+      ['getCards', (a) => a.getCards(), 'GET', '/za/v1/cards', undefined],
+      [
+        'getEnv',
+        (a) => a.getEnv(7),
+        'GET',
+        '/za/v1/cards/7/environmentvariables',
+        undefined,
+      ],
+      [
+        'uploadEnv',
+        (a) => a.uploadEnv(7, { A: '1' }),
+        'POST',
+        '/za/v1/cards/7/environmentvariables',
+        { variables: { A: '1' } },
+      ],
+      ['getCode', (a) => a.getCode(7), 'GET', '/za/v1/cards/7/code', undefined],
+      [
+        'uploadCode',
+        (a) => a.uploadCode(7, { code: 'x' }),
+        'POST',
+        '/za/v1/cards/7/code',
+        { code: 'x' },
+      ],
+      [
+        'getPublishedCode',
+        (a) => a.getPublishedCode(7),
+        'GET',
+        '/za/v1/cards/7/publishedcode',
+        undefined,
+      ],
+      [
+        'uploadPublishedCode',
+        (a) => a.uploadPublishedCode(7, 'cid', 'x'),
+        'POST',
+        '/za/v1/cards/7/publish',
+        { code: 'x', codeId: 'cid' },
+      ],
+      [
+        'toggleCode',
+        (a) => a.toggleCode(7, true),
+        'POST',
+        '/za/v1/cards/7/toggle-programmable-feature',
+        { Enabled: true },
+      ],
+      [
+        'getExecutions',
+        (a) => a.getExecutions(7),
+        'GET',
+        '/za/v1/cards/7/code/executions',
+        undefined,
+      ],
+      [
+        'executeCode',
+        (a) => a.executeCode('x', sampleTransaction, 7),
+        'POST',
+        '/za/v1/cards/7/code/execute',
+        expect.objectContaining({ simulationcode: 'x' }),
+      ],
+      [
+        'getCurrencies',
+        (a) => a.getCurrencies(),
+        'GET',
+        '/za/v1/cards/currencies',
+        undefined,
+      ],
+      [
+        'getCountries',
+        (a) => a.getCountries(),
+        'GET',
+        '/za/v1/cards/countries',
+        undefined,
+      ],
+      [
+        'getMerchants',
+        (a) => a.getMerchants(),
+        'GET',
+        '/za/v1/cards/merchants',
+        undefined,
+      ],
+    ])('%s sends %s %s', async (_name, call, method, path, body) => {
+      authThen(jsonResponse({ data: {} }));
+      await call(api);
+
+      const { url, init } = lastCall();
+      expect(init.method).toBe(method);
+      expect(url).toBe(`${HOST}${path}`);
+      if (body === undefined) {
+        expect(init.body).toBeUndefined();
+        expect(init.headers).not.toHaveProperty('content-type');
+      } else {
+        expect(JSON.parse(String(init.body))).toEqual(body);
+        expect(init.headers).toHaveProperty('content-type', 'application/json');
+      }
     });
   });
 

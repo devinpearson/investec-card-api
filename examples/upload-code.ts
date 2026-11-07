@@ -1,16 +1,23 @@
-// Example: Upload code to a programmable card
-import { InvestecCardApi } from '../src/investec-card-api';
+// Example: save code to a card (dry run unless CONFIRM_UPLOAD=true)
+import {
+  approveAllCode,
+  cardKeyFromEnv,
+  createClientFromEnv,
+} from './create-client';
 
-async function uploadCode() {
-  const api = new InvestecCardApi('your-client-id', 'your-client-secret', 'your-api-key');
-  const cardKey = 123456; // Replace with your card key
-  const code = { code: 'return true;' };
+const api = createClientFromEnv();
+const cardKey = cardKeyFromEnv();
+
+if (process.env.CONFIRM_UPLOAD !== 'true') {
+  console.log(`Dry run: would save this code to card ${cardKey}:\n`);
+  console.log(approveAllCode);
+  console.log('Set CONFIRM_UPLOAD=true to upload it.');
+} else {
   try {
-    const result = await api.uploadCode(cardKey, code);
-    console.log('Upload result:', result);
+    const result = await api.uploadCode(cardKey, { code: approveAllCode });
+    console.log('Saved code:', result.data.result);
   } catch (err) {
     console.error('Error uploading code:', err);
+    process.exitCode = 1;
   }
 }
-
-uploadCode();

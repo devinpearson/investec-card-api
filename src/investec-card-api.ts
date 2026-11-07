@@ -17,11 +17,15 @@ const DEFAULT_HOST = 'https://openapi.investec.com';
 const REQUEST_TIMEOUT_MS = 30_000;
 /** Refresh tokens this many ms before they expire. */
 const TOKEN_SKEW_MS = 60_000;
+const CARDS_SCOPE = 'cards';
+
+type Method = 'GET' | 'POST';
 
 /**
  * Helper to create a full API endpoint URL from host and path.
  */
-const createEndpoint = (host: string, path: string) => new URL(path, host).toString();
+const createEndpoint = (host: string, path: string) =>
+  new URL(path, host).toString();
 
 /**
  * Main API class for interacting with Investec programmable cards.
@@ -35,8 +39,10 @@ const createEndpoint = (host: string, path: string) => new URL(path, host).toStr
  *
  * @remarks
  * - All methods throw {@link InvestecApiError} on HTTP failures.
- * - All methods return typed responses.
- * - You must provide valid Investec API credentials.
+ * - Card methods reject with a `TypeError` for an invalid card key, before
+ *   any request is made.
+ * - A request that gets a 401 is retried once with a fresh token.
+ * - You must provide valid Investec API credentials with the `cards` scope.
  */
 export class InvestecCardApi {
   private readonly host: string;
@@ -54,7 +60,12 @@ export class InvestecCardApi {
    * @param apiKey - Investec API key
    * @param host - API host URL (default: 'https://openapi.investec.com')
    */
-  constructor(clientId: string, clientSecret: string, apiKey: string, host: string = DEFAULT_HOST) {
+  constructor(
+    clientId: string,
+    clientSecret: string,
+    apiKey: string,
+    host: string = DEFAULT_HOST,
+  ) {
     this.host = host;
     this.apiKey = apiKey;
     this.clientId = clientId;
@@ -84,16 +95,18 @@ export class InvestecCardApi {
   /**
    * Requests a new OAuth access token from Investec.
    * @returns The AuthResponse object.
-   * @throws InvestecApiError if authentication fails or the cards scope is missing.
+   * @throws InvestecApiError if authentication fails, or with status 403 if
+   * the token does not carry the `cards` scope.
    */
   async getAccessToken(): Promise<AuthResponse> {
-    const endpoint = createEndpoint(this.host, `/identity/v2/oauth2/token`);
+    const endpoint = createEndpoint(this.host, '/identity/v2/oauth2/token');
     const response = await fetch(endpoint, {
       method: 'POST',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: {
-        Authorization:
-          'Basic ' + Buffer.from(this.clientId + ':' + this.clientSecret).toString('base64'),
+        Authorization: `Basic ${Buffer.from(
+          `${this.clientId}:${this.clientSecret}`,
+        ).toString('base64')}`,
         'x-api-key': this.apiKey,
         'content-type': 'application/x-www-form-urlencoded',
       },
@@ -101,13 +114,20 @@ export class InvestecCardApi {
     });
 
     if (!response.ok) {
-      throw await this.createHttpError(response);
+      throw await toApiError(response, endpoint);
     }
 
-    const result = (await response.json()) as AuthResponse;
+    const result = await readJson<AuthResponse>(response, endpoint);
 
-    if (!result.scope.includes('cards')) {
-      throw new InvestecApiError('You require the cards scope to use this tool', response.status);
+    // Scopes are space-separated; match whole entries, not substrings.
+    const scopes = (result.scope ?? '').split(/\s+/);
+    if (!scopes.includes(CARDS_SCOPE)) {
+      throw new InvestecApiError(
+        'You require the cards scope to use this tool',
+        403,
+        { scope: result.scope },
+        endpoint,
+      );
     }
 
     this.token = result.access_token;
@@ -116,13 +136,15 @@ export class InvestecCardApi {
   }
 
   /**
-   * Uploads environment variables to a programmable card.
+   * Replaces the environment variables on a programmable card.
+   * The variables are sent as `{ variables: env }`, the shape the API expects.
    */
   async uploadEnv(cardKey: number, env: EnvVars): Promise<EnvResponse> {
-    return this.request<EnvResponse>(
+    return this.cardRequest<EnvResponse>(
       'POST',
-      `/za/v1/cards/${encodeURIComponent(cardKey.toString())}/environmentvariables`,
-      env
+      cardKey,
+      '/environmentvariables',
+      { variables: env },
     );
   }
 
@@ -130,38 +152,38 @@ export class InvestecCardApi {
    * Uploads code to a programmable card.
    */
   async uploadCode(cardKey: number, code: CodePayload): Promise<CodeResponse> {
-    return this.request<CodeResponse>(
-      'POST',
-      `/za/v1/cards/${encodeURIComponent(cardKey.toString())}/code`,
-      code
-    );
+    return this.cardRequest<CodeResponse>('POST', cardKey, '/code', code);
   }
 
   /**
    * Publishes code to a programmable card.
    */
-  async uploadPublishedCode(cardKey: number, codeId: string, code: string): Promise<CodeResponse> {
-    return this.request<CodeResponse>(
-      'POST',
-      `/za/v1/cards/${encodeURIComponent(cardKey.toString())}/publish`,
-      { code, codeId }
-    );
+  async uploadPublishedCode(
+    cardKey: number,
+    codeId: string,
+    code: string,
+  ): Promise<CodeResponse> {
+    return this.cardRequest<CodeResponse>('POST', cardKey, '/publish', {
+      code,
+      codeId,
+    });
   }
 
   /**
    * Retrieves all programmable cards for the authenticated user.
    */
   async getCards(): Promise<CardResponse> {
-    return this.request<CardResponse>('GET', `/za/v1/cards`);
+    return this.request<CardResponse>('GET', '/za/v1/cards');
   }
 
   /**
    * Retrieves environment variables for a programmable card.
    */
   async getEnv(cardKey: number): Promise<EnvResponse> {
-    return this.request<EnvResponse>(
+    return this.cardRequest<EnvResponse>(
       'GET',
-      `/za/v1/cards/${encodeURIComponent(cardKey.toString())}/environmentvariables`
+      cardKey,
+      '/environmentvariables',
     );
   }
 
@@ -169,30 +191,25 @@ export class InvestecCardApi {
    * Retrieves code for a programmable card.
    */
   async getCode(cardKey: number): Promise<CodeResponse> {
-    return this.request<CodeResponse>(
-      'GET',
-      `/za/v1/cards/${encodeURIComponent(cardKey.toString())}/code`
-    );
+    return this.cardRequest<CodeResponse>('GET', cardKey, '/code');
   }
 
   /**
    * Retrieves published code for a programmable card.
    */
   async getPublishedCode(cardKey: number): Promise<CodeResponse> {
-    return this.request<CodeResponse>(
-      'GET',
-      `/za/v1/cards/${encodeURIComponent(cardKey.toString())}/publishedcode`
-    );
+    return this.cardRequest<CodeResponse>('GET', cardKey, '/publishedcode');
   }
 
   /**
    * Enables or disables programmable features on a card.
    */
   async toggleCode(cardKey: number, enabled: boolean): Promise<CodeToggle> {
-    return this.request<CodeToggle>(
+    return this.cardRequest<CodeToggle>(
       'POST',
-      `/za/v1/cards/${encodeURIComponent(cardKey.toString())}/toggle-programmable-feature`,
-      { Enabled: enabled }
+      cardKey,
+      '/toggle-programmable-feature',
+      { Enabled: enabled },
     );
   }
 
@@ -200,9 +217,10 @@ export class InvestecCardApi {
    * Retrieves code execution results for a programmable card.
    */
   async getExecutions(cardKey: number): Promise<ExecutionResult> {
-    return this.request<ExecutionResult>(
+    return this.cardRequest<ExecutionResult>(
       'GET',
-      `/za/v1/cards/${encodeURIComponent(cardKey.toString())}/code/executions`
+      cardKey,
+      '/code/executions',
     );
   }
 
@@ -212,42 +230,38 @@ export class InvestecCardApi {
   async executeCode(
     code: string,
     transaction: Transaction,
-    cardKey: number
+    cardKey: number,
   ): Promise<ExecuteResult> {
-    return this.request<ExecuteResult>(
-      'POST',
-      `/za/v1/cards/${encodeURIComponent(cardKey.toString())}/code/execute`,
-      {
-        simulationcode: code,
-        centsAmount: transaction.centsAmount,
-        currencyCode: transaction.currencyCode,
-        merchantCode: transaction.merchant.category.code,
-        merchantName: transaction.merchant.name,
-        merchantCity: transaction.merchant.city,
-        countryCode: transaction.merchant.country.code,
-      }
-    );
+    return this.cardRequest<ExecuteResult>('POST', cardKey, '/code/execute', {
+      simulationcode: code,
+      centsAmount: transaction.centsAmount,
+      currencyCode: transaction.currencyCode,
+      merchantCode: transaction.merchant.category.code,
+      merchantName: transaction.merchant.name,
+      merchantCity: transaction.merchant.city,
+      countryCode: transaction.merchant.country.code,
+    });
   }
 
   /**
    * Retrieves supported currencies for programmable cards.
    */
   async getCurrencies(): Promise<ReferenceResponse> {
-    return this.request<ReferenceResponse>('GET', `/za/v1/cards/currencies`);
+    return this.request<ReferenceResponse>('GET', '/za/v1/cards/currencies');
   }
 
   /**
    * Retrieves supported countries for programmable cards.
    */
   async getCountries(): Promise<ReferenceResponse> {
-    return this.request<ReferenceResponse>('GET', `/za/v1/cards/countries`);
+    return this.request<ReferenceResponse>('GET', '/za/v1/cards/countries');
   }
 
   /**
    * Retrieves supported merchants for programmable cards.
    */
   async getMerchants(): Promise<ReferenceResponse> {
-    return this.request<ReferenceResponse>('GET', `/za/v1/cards/merchants`);
+    return this.request<ReferenceResponse>('GET', '/za/v1/cards/merchants');
   }
 
   private async refreshAccessToken(): Promise<string> {
@@ -255,9 +269,59 @@ export class InvestecCardApi {
     return result.access_token;
   }
 
-  private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-    const token = await this.getToken();
+  private invalidateToken(): void {
+    this.token = undefined;
+    this.expiresAt = 0;
+  }
+
+  /** A request scoped to one card: validates the key, names 404s "Card not found". */
+  private async cardRequest<T>(
+    method: Method,
+    cardKey: number,
+    suffix: string,
+    body?: unknown,
+  ): Promise<T> {
+    if (!Number.isSafeInteger(cardKey) || cardKey < 0) {
+      throw new TypeError(
+        `Invalid card key: expected a non-negative integer, got ${String(cardKey)}`,
+      );
+    }
+    return this.request<T>(
+      method,
+      `/za/v1/cards/${cardKey}${suffix}`,
+      body,
+      'Card not found',
+    );
+  }
+
+  private async request<T>(
+    method: Method,
+    path: string,
+    body?: unknown,
+    notFoundMessage?: string,
+  ): Promise<T> {
     const endpoint = createEndpoint(this.host, path);
+
+    let response = await this.send(method, endpoint, body);
+    if (response.status === 401) {
+      // The token may have been revoked or expired early; retry once.
+      this.invalidateToken();
+      response = await this.send(method, endpoint, body);
+    }
+
+    if (!response.ok) {
+      throw await toApiError(response, endpoint, notFoundMessage);
+    }
+
+    return readJson<T>(response, endpoint);
+  }
+
+  private async send(
+    method: Method,
+    endpoint: string,
+    body: unknown,
+  ): Promise<Response> {
+    const token = await this.getToken();
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       'x-api-key': this.apiKey,
@@ -268,45 +332,74 @@ export class InvestecCardApi {
       headers['content-type'] = 'application/json';
     }
 
-    const response = await fetch(endpoint, {
+    return fetch(endpoint, {
       method,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new InvestecApiError('Card not found', 404, await readErrorBody(response));
-      }
-      throw await this.createHttpError(response);
-    }
-
-    return (await response.json()) as T;
-  }
-
-  private async createHttpError(response: Response): Promise<InvestecApiError> {
-    const body = await readErrorBody(response);
-    const message =
-      typeof body === 'string' && body.length > 0
-        ? body
-        : response.statusText || `Request failed with status ${response.status}`;
-    return new InvestecApiError(message, response.status, body);
   }
 }
 
-async function readErrorBody(response: Response): Promise<unknown> {
+/** Parses a successful response, turning a non-JSON body into an InvestecApiError. */
+async function readJson<T>(response: Response, endpoint: string): Promise<T> {
+  const text = await response.text();
   try {
-    const text = await response.text();
-    if (!text) {
-      return undefined;
+    return JSON.parse(text) as T;
+  } catch {
+    throw new InvestecApiError(
+      `Expected a JSON response from ${endpoint}`,
+      response.status,
+      text,
+      endpoint,
+    );
+  }
+}
+
+async function toApiError(
+  response: Response,
+  endpoint: string,
+  notFoundMessage?: string,
+): Promise<InvestecApiError> {
+  const body = await readErrorBody(response);
+  const message =
+    (response.status === 404 && notFoundMessage) ||
+    messageFromBody(body) ||
+    response.statusText ||
+    `Request failed with status ${response.status}`;
+  return new InvestecApiError(message, response.status, body, endpoint);
+}
+
+/** Picks a human-readable message out of a plain-text or JSON error body. */
+function messageFromBody(body: unknown): string | undefined {
+  if (typeof body === 'string') {
+    return body;
+  }
+  if (body && typeof body === 'object') {
+    const record = body as Record<string, unknown>;
+    for (const key of ['message', 'error_description', 'error', 'title']) {
+      const value = record[key];
+      if (typeof value === 'string' && value) {
+        return value;
+      }
     }
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      return text;
-    }
+  }
+  return undefined;
+}
+
+async function readErrorBody(response: Response): Promise<unknown> {
+  let text: string;
+  try {
+    text = await response.text();
   } catch {
     return undefined;
+  }
+  if (!text) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
   }
 }

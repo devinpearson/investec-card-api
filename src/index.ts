@@ -1,3 +1,5 @@
+export { InvestecApiError } from './errors';
+export { InvestecCardApi } from './investec-card-api';
 export type {
   AuthResponse,
   Card,
@@ -17,7 +19,4 @@ export type {
   ReferenceResponse,
   Transaction,
 } from './types';
-
 export { CountryCode } from './types';
-export { InvestecApiError } from './errors';
-export { InvestecCardApi } from './investec-card-api';
